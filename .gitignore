@@ -1,0 +1,33 @@
+# ambiente e saídas de build
+venv/
+__pycache__/
+build/
+build2/
+build_v2/
+build_setup/
+build_supereco/
+dist/
+dist_novo/
+dist_supereco/
+dist_v2/
+installer/
+backup_onefile/
+*.spec
+*.log
+*.bak
+
+# rascunhos, capturas de tela e canal elevado de desenvolvimento (só deste PC)
+_*
+*.png
+ui_audit_screenshots/
+desktop.ini
+.claude/
+
+# notas internas de desenvolvimento (ficam só no PC)
+CLAUDE.md
+qa_report.md
+ui_audit_*.md
+nitrosense_ui_dump.txt
+
+# cópia instalada do app (binários)
+app/
