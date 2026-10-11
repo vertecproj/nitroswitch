@@ -73,3 +73,58 @@ def memory():
     total = m.ullTotalPhys / 1024 ** 3
     used = (m.ullTotalPhys - m.ullAvailPhys) / 1024 ** 3
     return used, total, int(m.dwMemoryLoad)
+
+
+class _POWERSTATUS(ctypes.Structure):
+    _fields_ = [("ACLineStatus", ctypes.c_ubyte), ("BatteryFlag", ctypes.c_ubyte),
+                ("BatteryLifePercent", ctypes.c_ubyte), ("SystemStatusFlag", ctypes.c_ubyte),
+                ("BatteryLifeTime", wintypes.DWORD), ("BatteryFullLifeTime", wintypes.DWORD)]
+
+
+class _BATTERYSTATE(ctypes.Structure):
+    _fields_ = [("AcOnLine", ctypes.c_ubyte), ("BatteryPresent", ctypes.c_ubyte),
+                ("Charging", ctypes.c_ubyte), ("Discharging", ctypes.c_ubyte),
+                ("Spare", ctypes.c_ubyte * 3), ("Tag", ctypes.c_ubyte),
+                ("MaxCapacity", wintypes.ULONG), ("RemainingCapacity", wintypes.ULONG),
+                ("Rate", wintypes.LONG), ("EstimatedTime", wintypes.ULONG),
+                ("DefaultAlert1", wintypes.ULONG), ("DefaultAlert2", wintypes.ULONG)]
+
+
+def battery():
+    """(percentual, na_tomada, minutos) ou None se não há bateria. `minutos` =
+    tempo restante na bateria, ou até carregar na tomada; None = ainda sem
+    estimativa. O Windows demora a estimar depois de desplugar, então quando ele
+    não sabe a conta é feita aqui: carga restante / consumo atual."""
+    ps = _POWERSTATUS()
+    if not _k32.GetSystemPowerStatus(ctypes.byref(ps)) or ps.BatteryFlag & 128 or ps.BatteryLifePercent > 100:
+        return None
+    plugged = ps.ACLineStatus == 1
+    minutes = None
+    if not plugged and ps.BatteryLifeTime != 0xFFFFFFFF:
+        minutes = ps.BatteryLifeTime // 60
+    else:
+        st = _BATTERYSTATE()
+        try:
+            ok = ctypes.windll.powrprof.CallNtPowerInformation(5, None, 0, ctypes.byref(st), ctypes.sizeof(st)) == 0
+        except (AttributeError, OSError):
+            ok = False
+        if ok and st.Rate and st.MaxCapacity:
+            if not plugged and st.Rate < 0:
+                minutes = st.RemainingCapacity * 60 // -st.Rate
+            elif plugged and st.Rate > 0 and st.MaxCapacity > st.RemainingCapacity:
+                minutes = (st.MaxCapacity - st.RemainingCapacity) * 60 // st.Rate
+    if minutes is not None and not 0 < minutes < 48 * 60:
+        minutes = None
+    return int(ps.BatteryLifePercent), plugged, minutes
+
+
+def battery_text():
+    """Linha pronta para o painel; vazia em PC sem bateria."""
+    b = battery()
+    if b is None:
+        return ""
+    pct, plugged, minutes = b
+    tempo = f"{minutes // 60}h{minutes % 60:02d}" if minutes is not None else None
+    if plugged:
+        return f"BATERIA {pct}% · " + (f"carrega em {tempo}" if tempo else "na tomada")
+    return f"BATERIA {pct}% · " + (f"{tempo} restantes" if tempo else "calculando…")

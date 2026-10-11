@@ -684,6 +684,8 @@ class ModePopup(tk.Tk):
             self.live_vals[key] = self._text(cx + 12, y + 38, "—", self.f_num, C_TEXT)
         self._line(x0 + 1, y + 56, x1 - 1, y + 56, C_LINE)
         self._text(x0 + 12, y + 67, "TEMP CPU · ÚLTIMOS 80 s", self.f_mono9, C_DIM)
+        # bateria: percentual e tempo restante (vazio em PC sem bateria)
+        self.batt_text = self._text(x1 - 12, y + 67, sysmetrics.battery_text(), self.f_mono9, C_TEXT, anchor="e")
         self.spark = self.cv.create_line(0, 0, 0, 0, fill=self.accent, width=max(1, round(1.6 * self.k)))
         self.spark_area = (x0 + 12, y + 74, x1 - 12, y + LIVE_H - 8)
         self.temp_hist = []
@@ -765,6 +767,7 @@ class ModePopup(tk.Tk):
                 self.cv.itemconfig(self.live_vals["cpu"], text=f"{sysmetrics.cpu_percent():.0f}%")
                 used, _total, _pct = sysmetrics.memory()
                 self.cv.itemconfig(self.live_vals["ram"], text=f"{used:.1f}G")
+                self.cv.itemconfig(self.batt_text, text=sysmetrics.battery_text())
         except Exception:
             pass
         self.after(2000, self._metrics_tick)
