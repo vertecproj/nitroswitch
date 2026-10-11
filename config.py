@@ -24,6 +24,8 @@ DEFAULTS = {
     "fan_custom_cap": 70,
     # tecla que abre/fecha o painel, aprendida pelo botão na UI (ver hotkey.py)
     "hotkey": None,
+    # visual do painel: "gamer" (Cockpit Neon) ou "casual" (ver ui.THEMES)
+    "theme": "gamer",
 }
 
 

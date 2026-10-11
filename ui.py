@@ -104,6 +104,41 @@ MODE_SPECS = [
     ("supereco", ACC_SUPERECO, "SUPER ECO", "CPU 30% · 1.4 GHz · Brilho 25%"),
 ]
 MODE_ACCENT = {m: c for m, c, _t, _s in MODE_SPECS}
+
+# ---------------------------------------------------------------- visuais
+# Dois visuais no MESMO layout, escolhidos em Ajustes (config "theme"):
+#   gamer  = Cockpit Neon (os valores acima)
+#   casual = claro e limpo: sem linhas de varredura, cantos arredondados em vez
+#            de cortados, Segoe UI no lugar de Rajdhani/Consolas, cores suaves
+# Trocar = reatribuir estas variáveis do módulo e reconstruir a tela
+# (ModePopup._set_theme); o desenho lê tudo daqui na hora de construir.
+THEME = "gamer"
+ROUND = 0            # raio (lógico) dos polígonos; 0 = cantos cortados
+SP_K = 1.0           # multiplicador do espaçamento entre letras
+DISPLAY_K = 1.0      # escala da fonte de título (Segoe UI é mais larga que Rajdhani)
+C_HOVER = "#ffffff"  # cor misturada ao fundo quando o mouse passa
+THEMES = {
+    "gamer": dict(
+        C_BG="#0a0a0e", C_SCAN="#0d0d11", C_SURF="#101015", C_LINE="#1f1f26", C_LINE2="#2c2c35",
+        C_TEXT="#f2f2f5", C_MUT="#8d8d96", C_DIM="#5f5f69", C_AMBER="#ff9f43", C_HOVER="#ffffff",
+        ACC_SUPERECO="#5ad1ff", ACC_ECO="#7ef9d0", ACC_BALANCED="#ffd479", ACC_BOOST="#ff6b6b",
+        FONT_DISPLAY="Rajdhani", FONT_MONO="Consolas", CHAMFER=26, ROUND=0, SP_K=1.0, DISPLAY_K=1.0),
+    "casual": dict(
+        C_BG="#f4f5f8", C_SCAN="#f4f5f8", C_SURF="#ffffff", C_LINE="#dfe2e8", C_LINE2="#c9cdd6",
+        C_TEXT="#1d2028", C_MUT="#5a6070", C_DIM="#8b91a0", C_AMBER="#b45f06", C_HOVER="#000000",
+        ACC_SUPERECO="#2b7fd0", ACC_ECO="#1f9a6c", ACC_BALANCED="#b9770e", ACC_BOOST="#d5484a",
+        FONT_DISPLAY="Segoe UI", FONT_MONO="Segoe UI", CHAMFER=0, ROUND=8, SP_K=0.25, DISPLAY_K=0.8),
+}
+THEME_LABELS = [("gamer", "GAMER"), ("casual", "CASUAL")]
+
+
+def apply_theme(name):
+    global THEME, MODE_SPECS, MODE_ACCENT
+    THEME = name if name in THEMES else "gamer"
+    globals().update(THEMES[THEME])
+    acc = {"boost": ACC_BOOST, "balanced": ACC_BALANCED, "eco": ACC_ECO, "supereco": ACC_SUPERECO}
+    MODE_SPECS = [(m, acc[m], t, sub) for m, _c, t, sub in MODE_SPECS]
+    MODE_ACCENT = dict(acc)
 MODE_LABELS = {"supereco": "SUPER ECO", "eco": "ECO", "balanced": "EQUILIBRADO", "boost": "BOOST"}
 MODE_LABELS_UI = {"supereco": "Super Eco", "eco": "Eco", "balanced": "Equilibrado", "boost": "Boost"}
 FAN_SEG = [("auto", "AUTO"), ("silenciosa", "SILENC."), ("equilibrada", "EQUIL."),
@@ -152,6 +187,7 @@ class ModePopup(tk.Tk):
         self.on_close_to_tray = on_close_to_tray
         self.current_mode = None
         self.cfg = config.load()
+        apply_theme(self.cfg.get("theme", "gamer"))
         self._just_shown = False
         self._learning_hotkey = False
         self._mode_click_enabled = True
@@ -301,6 +337,8 @@ class ModePopup(tk.Tk):
         return v * self.k
 
     def _font(self, family, px, bold=False):
+        if family == FONT_DISPLAY:
+            px *= DISPLAY_K
         return tkfont.Font(family=family, size=-max(1, round(px * self.k)),
                            weight="bold" if bold else "normal")
 
@@ -311,9 +349,18 @@ class ModePopup(tk.Tk):
         )
 
     def _poly(self, pts, fill="", outline="", width=1, tags=()):
+        smooth = False
+        if ROUND:  # visual casual: o retângulo que envolve a forma, com cantos arredondados
+            xs, ys = [pt[0] for pt in pts], [pt[1] for pt in pts]
+            x0, y0, x1, y1 = min(xs), min(ys), max(xs), max(ys)
+            r = min(ROUND, (x1 - x0) / 2, (y1 - y0) / 2)
+            pts = [(x0 + r, y0), (x0 + r, y0), (x1 - r, y0), (x1 - r, y0), (x1, y0), (x1, y0 + r), (x1, y0 + r),
+                   (x1, y1 - r), (x1, y1 - r), (x1, y1), (x1 - r, y1), (x1 - r, y1), (x0 + r, y1), (x0 + r, y1),
+                   (x0, y1), (x0, y1 - r), (x0, y1 - r), (x0, y0 + r), (x0, y0 + r), (x0, y0)]
+            smooth = True
         flat = [self._p(v) for pt in pts for v in pt]
         return self.cv.create_polygon(
-            flat, fill=fill, outline=outline, width=max(1, round(width * self.k)), tags=tags,
+            flat, fill=fill, outline=outline, width=max(1, round(width * self.k)), tags=tags, smooth=smooth,
         )
 
     def _line(self, x0, y0, x1, y1, fill, width=1, tags=()):
@@ -330,7 +377,7 @@ class ModePopup(tk.Tk):
     def _spaced(self, x, y, text, font, fill, sp=1.5, anchor="w", tags=()):
         """Texto com espaçamento entre letras (o Tk não tem). Devolve
         (ids, largura_lógica)."""
-        spx = self._p(sp)
+        spx = self._p(sp * SP_K)
         widths = [font.measure(ch) for ch in text]
         total = sum(widths) + spx * max(0, len(text) - 1)
         cx = self._p(x) - (total if anchor == "e" else total / 2 if anchor == "c" else 0)
@@ -544,7 +591,7 @@ class ModePopup(tk.Tk):
 
     def _card_hover(self, mode, on):
         if self.mode_state[mode] == "idle":
-            self.cv.itemconfig(self.card_polys[mode], fill=_mix(C_BG, "#ffffff", 0.05) if on else "")
+            self.cv.itemconfig(self.card_polys[mode], fill=_mix(C_BG, C_HOVER, 0.05) if on else "")
 
     def _on_card_click(self, mode):
         if self._mode_click_enabled:
@@ -630,7 +677,8 @@ class ModePopup(tk.Tk):
         self.sl_x0, self.sl_x1, self.sl_y = x0 + 32, x1 - 32, ly + 42
         self.sl_track = self._rect(self.sl_x0, self.sl_y - 2, self.sl_x1, self.sl_y + 2, fill=C_LINE)
         self.sl_fill = self._rect(self.sl_x0, self.sl_y - 2, self.sl_x0, self.sl_y + 2, fill=self.accent)
-        self.sl_thumb = self._poly([(0, 0), (1, 0), (1, 1), (0, 1)], fill="#ffffff", outline=self.accent, width=1.6)
+        self.sl_thumb = self.cv.create_polygon(0, 0, 1, 0, 1, 1, 0, 1, fill="#ffffff", outline=self.accent,
+                                               width=max(1, round(1.6 * self.k)), smooth=bool(ROUND))
         self.sl_hit = self._hit(self.hits, self.sl_x0 - 12, ly + 28, self.sl_x1 + 12, ly + 58, None,
                                 cursor="sb_h_double_arrow")
         # estado
@@ -648,7 +696,7 @@ class ModePopup(tk.Tk):
         frac = (cap - fan_control.MIN_CUSTOM_CAP) / (100 - fan_control.MIN_CUSTOM_CAP)
         x = self.sl_x0 + max(0.0, min(1.0, frac)) * (self.sl_x1 - self.sl_x0)
         self.cv.coords(self.sl_fill, self._p(self.sl_x0), self._p(self.sl_y - 2), self._p(x), self._p(self.sl_y + 2))
-        w, h, sk = 12, 22, 4
+        w, h, sk = (16, 16, 0) if ROUND else (12, 22, 4)
         pts = [(x - w / 2 + sk, self.sl_y - h / 2), (x + w / 2 + sk, self.sl_y - h / 2),
                (x + w / 2 - sk, self.sl_y + h / 2), (x - w / 2 - sk, self.sl_y + h / 2)]
         self.cv.coords(self.sl_thumb, *[self._p(v) for pt in pts for v in pt])
@@ -994,8 +1042,66 @@ class ModePopup(tk.Tk):
                      "• Os modos de energia funcionam normalmente."]
         for i, line in enumerate(lines):
             self._text(PAD, y + 8 + i * 17, line, self.f_mono9, C_MUT, tags=T)
+        y = self.H - 110
+        self._section_sheet(y, "VISUAL")
+        y += 16
+        cw = (PANEL_W - 2 * PAD - 6) / 2
+        for i, (name, label) in enumerate(THEME_LABELS):
+            cx0 = PAD + i * (cw + 6)
+            on = name == THEME
+            self._poly([(cx0, y), (cx0 + cw - 8, y), (cx0 + cw, y + 8), (cx0 + cw, y + 38), (cx0, y + 38)],
+                       fill=_mix(C_BG, self.accent, 0.18) if on else "", outline=self.accent if on else C_LINE,
+                       tags=T + (("acc_out",) if on else ()))
+            self._text(cx0 + cw / 2, y + 19, label, self.f_mono10b if on else self.f_mono10,
+                       C_TEXT if on else C_MUT, anchor="c", tags=T)
+            self._hit(self.sheet_hits, cx0, y, cx0 + cw, y + 38, lambda n=name: self._set_theme(n))
         self._text(PAD, self.H - 18, f"NITROSWITCH v{__version__} · atualiza sozinho", self.f_mono9, C_DIM, tags=T)
         self.cv.itemconfigure("sheet", state="hidden")
+
+    def _set_theme(self, name):
+        """Troca o visual na hora: reconstrói a tela inteira com as cores e
+        formas do outro tema e devolve o estado (modo ativo, ventoinha, botão
+        de atualização, ajustes abertos)."""
+        if name == THEME:
+            return
+        self.cfg["theme"] = name
+        data = config.load()
+        data["theme"] = name
+        config.save(data)
+        for key in list(self._anims):
+            try:
+                self.after_cancel(self._anims.pop(key))
+            except Exception:
+                pass
+        keep = (self._status_cache, self._status_dot, self._ns_text, self.temp_hist, self._pg_running)
+        self._pg_running = False
+        apply_theme(name)
+        self.cv.destroy()
+        self.sheet, self.sheet_open = None, False
+        self.configure(bg=C_BG)
+        self._build_ui()
+        self._apply_region()
+        self._status_cache, self._status_dot, self._ns_text, self.temp_hist, running = keep
+        mode = self.current_mode
+        if mode:
+            for m in self.mode_state:
+                self._set_card_state(m, "active" if m == mode else "idle")
+            self._move_hl(mode, MODE_ACCENT[mode], animate=False)
+            self._section(self.Y_MODO, "MODO", "sec_modo", name=MODE_LABELS[mode])
+            self._status_dot = MODE_ACCENT[mode]
+        # as cores guardadas eram do visual anterior: refaz a linha de status
+        if running:
+            self._update_status(self._status_cache[0], C_MUT)
+        elif mode:
+            self._update_status(f"MODO ATIVO: {MODE_LABELS[mode]}", C_TEXT)
+        else:
+            self._update_status("NENHUM MODO ATIVO", C_MUT)
+        self._sync_fan_ui()
+        if running:
+            self._pg_start()
+        if self.updater.ready:
+            self._show_update_button()
+        self._open_settings()
 
     def _paint_default_cells(self):
         for mode, (poly, txt, color) in self.def_cells.items():
@@ -1172,6 +1278,11 @@ class ModePopup(tk.Tk):
     # Atualização (ver updater.py): o botão só existe quando basta um clique
     # ------------------------------------------------------------------
     def _on_update_ready(self, version):
+        self._show_update_button()
+        if self.on_update_ready:
+            self.on_update_ready(version)
+
+    def _show_update_button(self):
         self.cv.itemconfigure(self.dev_id, state="hidden")
         self.cv.itemconfigure("upd", state="normal")
         self.cv.tag_raise("upd")
@@ -1181,8 +1292,6 @@ class ModePopup(tk.Tk):
         self._hit(self.hits, x0, y0, x1, y1, self.install_update,
                   hover=lambda on: self.cv.itemconfig(
                       self.upd_poly, fill=_mix(self.accent, "#ffffff", 0.3) if on else self.accent))
-        if self.on_update_ready:
-            self.on_update_ready(version)
 
     def install_update(self):
         """Clique em ATUALIZAR (painel ou bandeja): dispara o instalador já
