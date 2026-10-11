@@ -674,21 +674,42 @@ class ModePopup(tk.Tk):
         self._section(self.Y_LIVE_SEC, "AO VIVO", "sec_live")
         x0, x1, y = PAD, PANEL_W - PAD, self.Y_LIVE_BOX
         self._rect(x0, y, x1, y + LIVE_H, fill=C_SURF, outline=C_LINE)
-        cw = (x1 - x0) / 4
+        cw = (x1 - x0) / 5
         self.live_vals = {}
-        for i, (key, label) in enumerate((("cpu", "CPU"), ("temp", "TEMP"), ("gpu", "GPU"), ("ram", "RAM"))):
+        for i, (key, label) in enumerate((("bat", ""), ("cpu", "CPU"), ("temp", "TEMP"), ("gpu", "GPU"), ("ram", "RAM"))):
             cx = x0 + i * cw
             if i:
                 self._line(cx, y + 1, cx, y + 56, C_LINE)
-            self._spaced(cx + 12, y + 14, label, self.f_mono9, C_MUT, sp=1.6)
-            self.live_vals[key] = self._text(cx + 12, y + 38, "—", self.f_num, C_TEXT)
+                self._spaced(cx + 10, y + 14, label, self.f_mono9, C_MUT, sp=1.6)
+            self.live_vals[key] = self._text(cx + 10, y + 38, "—", self.f_num, C_TEXT)
+        # 1ª célula = bateria: o número grande é o TEMPO restante (ver _paint_battery)
+        self.bat_label = self._text(x0 + 10, y + 14, "BATERIA", self.f_mono9, C_MUT)
         self._line(x0 + 1, y + 56, x1 - 1, y + 56, C_LINE)
         self._text(x0 + 12, y + 67, "TEMP CPU · ÚLTIMOS 80 s", self.f_mono9, C_DIM)
         # bateria: percentual e tempo restante (vazio em PC sem bateria)
-        self.batt_text = self._text(x1 - 12, y + 67, sysmetrics.battery_text(), self.f_mono9, C_TEXT, anchor="e")
+        self.batt_text = self._text(x1 - 12, y + 67, "", self.f_mono9, C_TEXT, anchor="e")
+        self._paint_battery()
         self.spark = self.cv.create_line(0, 0, 0, 0, fill=self.accent, width=max(1, round(1.6 * self.k)))
         self.spark_area = (x0 + 12, y + 74, x1 - 12, y + LIVE_H - 8)
         self.temp_hist = []
+
+    def _paint_battery(self):
+        """Bateria em destaque na 1ª célula: tempo restante em número grande
+        (na tomada, ou sem estimativa ainda, o percentual)."""
+        b = sysmetrics.battery()
+        self.cv.itemconfig(self.batt_text, text=sysmetrics.battery_text())
+        if b is None:
+            return
+        pct, plugged, minutes = b
+        if plugged or minutes is None:
+            label, value = ("NA TOMADA" if plugged else "BATERIA"), f"{pct}%"
+        else:
+            label, value = f"BAT. {pct}%", f"{minutes // 60}h{minutes % 60:02d}"
+        low = not plugged and (pct < 20 or (minutes is not None and minutes < 30))
+        mid = not plugged and (pct < 40 or (minutes is not None and minutes < 60))
+        self.cv.itemconfig(self.bat_label, text=label)
+        self.cv.itemconfig(self.live_vals["bat"], text=value,
+                           fill=ACC_BOOST if low else ACC_BALANCED if mid else ACC_ECO)
 
     def _draw_spark(self):
         hist = self.temp_hist[-40:]
@@ -767,7 +788,7 @@ class ModePopup(tk.Tk):
                 self.cv.itemconfig(self.live_vals["cpu"], text=f"{sysmetrics.cpu_percent():.0f}%")
                 used, _total, _pct = sysmetrics.memory()
                 self.cv.itemconfig(self.live_vals["ram"], text=f"{used:.1f}G")
-                self.cv.itemconfig(self.batt_text, text=sysmetrics.battery_text())
+                self._paint_battery()
         except Exception:
             pass
         self.after(2000, self._metrics_tick)
