@@ -123,13 +123,18 @@ THEMES = {
         C_TEXT="#f2f2f5", C_MUT="#8d8d96", C_DIM="#5f5f69", C_AMBER="#ff9f43", C_HOVER="#ffffff",
         ACC_SUPERECO="#5ad1ff", ACC_ECO="#7ef9d0", ACC_BALANCED="#ffd479", ACC_BOOST="#ff6b6b",
         FONT_DISPLAY="Rajdhani", FONT_MONO="Consolas", CHAMFER=26, ROUND=0, SP_K=1.0, DISPLAY_K=1.0),
-    "casual": dict(
+    "casual": dict(  # noturno: cinza-azulado escuro, cores pastel
+        C_BG="#1b1d23", C_SCAN="#1b1d23", C_SURF="#23262e", C_LINE="#30343e", C_LINE2="#3f4450",
+        C_TEXT="#eceef2", C_MUT="#a3a8b5", C_DIM="#737988", C_AMBER="#f0a94a", C_HOVER="#ffffff",
+        ACC_SUPERECO="#6cb6f5", ACC_ECO="#5fd3a2", ACC_BALANCED="#f1c56b", ACC_BOOST="#f2787a",
+        FONT_DISPLAY="Segoe UI", FONT_MONO="Segoe UI", CHAMFER=0, ROUND=8, SP_K=0.25, DISPLAY_K=0.8),
+    "claro": dict(
         C_BG="#f4f5f8", C_SCAN="#f4f5f8", C_SURF="#ffffff", C_LINE="#dfe2e8", C_LINE2="#c9cdd6",
         C_TEXT="#1d2028", C_MUT="#5a6070", C_DIM="#8b91a0", C_AMBER="#b45f06", C_HOVER="#000000",
         ACC_SUPERECO="#2b7fd0", ACC_ECO="#1f9a6c", ACC_BALANCED="#b9770e", ACC_BOOST="#d5484a",
         FONT_DISPLAY="Segoe UI", FONT_MONO="Segoe UI", CHAMFER=0, ROUND=8, SP_K=0.25, DISPLAY_K=0.8),
 }
-THEME_LABELS = [("gamer", "GAMER"), ("casual", "CASUAL")]
+THEME_LABELS = [("gamer", "GAMER"), ("casual", "CASUAL"), ("claro", "CLARO")]
 
 
 def apply_theme(name):
@@ -1012,7 +1017,11 @@ class ModePopup(tk.Tk):
             tx1 = PANEL_W - PAD
             track = self._poly([(tx1 - 46, y + 8), (tx1 - 6, y + 8), (tx1, y + 14), (tx1, y + 30), (tx1 - 46, y + 30)],
                                fill=C_LINE, outline=C_LINE2, tags=T)
-            knob = self._rect(tx1 - 42, y + 12, tx1 - 30, y + 26, fill=C_MUT, tags=T)
+            if ROUND:  # visuais casuais: botão redondo
+                knob = self.cv.create_oval(self._p(tx1 - 42), self._p(y + 12), self._p(tx1 - 30), self._p(y + 26),
+                                           fill=C_MUT, width=0, tags=T)
+            else:
+                knob = self._rect(tx1 - 42, y + 12, tx1 - 30, y + 26, fill=C_MUT, tags=T)
             self.toggle_ids[key] = (track, knob, tx1, y + 12)
             self._hit(self.sheet_hits, tx1 - 50, y + 4, tx1 + 4, y + 34, lambda k=key: self._on_toggle(k))
             y += 54
@@ -1045,7 +1054,7 @@ class ModePopup(tk.Tk):
         y = self.H - 110
         self._section_sheet(y, "VISUAL")
         y += 16
-        cw = (PANEL_W - 2 * PAD - 6) / 2
+        cw = (PANEL_W - 2 * PAD - 6 * (len(THEME_LABELS) - 1)) / len(THEME_LABELS)
         for i, (name, label) in enumerate(THEME_LABELS):
             cx0 = PAD + i * (cw + 6)
             on = name == THEME
